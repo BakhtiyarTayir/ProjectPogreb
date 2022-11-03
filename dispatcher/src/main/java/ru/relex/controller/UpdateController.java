@@ -1,19 +1,24 @@
 package ru.relex.controller;
 
+import ru.relex.service.UpdateProducer;
 import ru.relex.utils.MessageUtils;
 import lombok.extern.log4j.Log4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
+import static ru.relex.model.RabbiqQueue.*;
+
 @Component
 @Log4j
 public class UpdateController {
     private TelegramBot telegramBot;
-    private MessageUtils messageUtils;
+    private final MessageUtils messageUtils;
+    private final UpdateProducer updateProducer;
 
-    public UpdateController(MessageUtils messageUtils) {
+    public UpdateController(MessageUtils messageUtils, UpdateProducer updateProducer) {
         this.messageUtils = messageUtils;
+        this.updateProducer = updateProducer;
     }
 
     public void registerBot(TelegramBot telegramBot) {
@@ -29,7 +34,7 @@ public class UpdateController {
         if (update.getMessage() != null) {
             distributeMessagesByType(update);
         } else {
-            log.error("Recieved unsupported message type" + update);
+            log.error("Unsupported message type is received: " + update);
         }
     }
 
@@ -51,17 +56,29 @@ public class UpdateController {
                 "Неподдерживаемый тип сообщения!");
         setView(sendMessage);
     }
+    private void setFileReceivedView(Update update) {
+        var sendMessage = messageUtils.generateSendMessageWithText(update,
+                "Файл получен, обрабатывается...");
+        setView(sendMessage);
+    }
 
     private void setView(SendMessage sendMessage) {
         telegramBot.sendAnswerMessage(sendMessage);
     }
 
     private void processPhotoMessage(Update update) {
+        updateProducer.produce(PHOTO_MESSAGE_UPDATE, update);
+        setFileReceivedView(update);
     }
 
+
+
     private void processDocMessage(Update update) {
+        updateProducer.produce(DOC_MESSAGE_UPDATE, update);
+        setFileReceivedView(update);
     }
 
     private void processTextMessage(Update update) {
+        updateProducer.produce(TEXT_MESSAGE_UPDATE, update);
     }
 }
